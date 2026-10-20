@@ -1,0 +1,29 @@
+{
+  "name": "Voting",
+  "version": "1.0.0",
+  "description": "Ranked Choice, Condorcet Winner & Pairwise Matrix Consensus System",
+  "type": "luno-web-app",
+  "mainClass": "RankedChoiceApp",
+  "entrypoint": {
+    "file": "src/RankedChoiceApp.js",
+    "class": "RankedChoiceApp",
+    "method": "run"
+  },
+  "main": [
+    "src/ThemeManager.js",
+    "src/ElectionData.js",
+    "src/PairwiseCalculator.js",
+    "src/CondorcetTabulator.js",
+    "src/IRV.js",
+    "src/IrvTabulator.js",
+    "src/Minimax.js",
+    "src/SankeyDiagram.js",
+    "src/PairwiseMatrixWidget.js",
+    "src/InstantRunoffWidget.js",
+    "src/RankedChoiceApp.js"
+  ],
+  "library": [
+    "DomBasics.js",
+    "UITools.js"
+  ]
+}
