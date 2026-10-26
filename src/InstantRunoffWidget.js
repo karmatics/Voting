@@ -161,4 +161,10 @@ class InstantRunoffWidget {
       }
     }
 
+  static _export = (() => {
+      if (typeof globalThis !== 'undefined') globalThis.InstantRunoffWidget = InstantRunoffWidget;
+      if (typeof window !== 'undefined') window.InstantRunoffWidget = InstantRunoffWidget;
+      if (typeof module !== 'undefined' && module.exports) module.exports = InstantRunoffWidget;
+      return true;
+    })();
 } // end class InstantRunoffWidget

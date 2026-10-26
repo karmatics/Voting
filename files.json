@@ -1,20 +1,33 @@
 {
   "main": [
+    "src/ThemeManager.js",
+    "src/ElectionData.js",
+    "src/PairwiseCalculator.js",
+    "src/Minimax.js",
+    "src/CondorcetTabulator.js",
+    "src/IRV.js",
+    "src/IrvTabulator.js",
+    "src/SankeyDiagram.js",
+    "src/PairwiseMatrixWidget.js",
+    "src/InstantRunoffWidget.js",
     "src/RankedChoiceApp.js"
   ],
   "local": [
-    "src/CondorcetTabulator.js",
+    "src/ThemeManager.js",
     "src/ElectionData.js",
-    "src/InstantRunoffWidget.js",
+    "src/PairwiseCalculator.js",
+    "src/Minimax.js",
+    "src/CondorcetTabulator.js",
     "src/IRV.js",
     "src/IrvTabulator.js",
-    "src/Minimax.js",
-    "src/PairwiseCalculator.js",
-    "src/PairwiseMatrixWidget.js",
     "src/SankeyDiagram.js",
-    "src/ThemeManager.js"
+    "src/PairwiseMatrixWidget.js",
+    "src/InstantRunoffWidget.js",
+    "src/RankedChoiceApp.js"
   ],
   "library": [
-    "UITools.js"
+    "DomBasics.js",
+    "UITools.js",
+    "CommunityOracle.js"
   ]
 }

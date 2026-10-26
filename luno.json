@@ -13,10 +13,10 @@
     "src/ThemeManager.js",
     "src/ElectionData.js",
     "src/PairwiseCalculator.js",
+    "src/Minimax.js",
     "src/CondorcetTabulator.js",
     "src/IRV.js",
     "src/IrvTabulator.js",
-    "src/Minimax.js",
     "src/SankeyDiagram.js",
     "src/PairwiseMatrixWidget.js",
     "src/InstantRunoffWidget.js",
@@ -24,6 +24,7 @@
   ],
   "library": [
     "DomBasics.js",
-    "UITools.js"
+    "UITools.js",
+    "CommunityOracle.js"
   ]
 }

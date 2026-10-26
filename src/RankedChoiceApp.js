@@ -5,47 +5,51 @@ class RankedChoiceApp {
     }
 
   async init() {
-      const params = new URLSearchParams(window.location.search);
-      const urlTheme = params.get('theme');
-      this.applyTheme(urlTheme);
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const urlTheme = params.get('theme');
+        this.applyTheme(urlTheme);
 
-      const urlMethod = params.get('method') || params.get('tab');
-      if (urlMethod) {
-        const val = urlMethod.toLowerCase().includes('irv') ? 'irv' : 'condorcet';
-        const radio = this.tabMethodRadios.find(r => r.value === val);
-        if (radio) {
-          this.tabMethodRadios.forEach(r => r.checked = (r.value === val));
+        const urlMethod = params.get('method') || params.get('tab');
+        if (urlMethod) {
+          const val = urlMethod.toLowerCase().includes('irv') ? 'irv' : 'condorcet';
+          const radio = this.tabMethodRadios.find(r => r.value === val);
+          if (radio) {
+            this.tabMethodRadios.forEach(r => r.checked = (r.value === val));
+          }
         }
-      }
 
-      const urlBallot = params.get('ballot');
-      if (urlBallot) {
-        if (urlBallot.startsWith('http://') || urlBallot.startsWith('https://')) {
-          this.ballotSelector.value = 'custom';
-          this.ballotTextArea.value = 'Loading custom ballot data...';
-          this.tabulateButton.disabled = true;
-          try {
-            const raw = await fetch(urlBallot).then(r => r.text());
-            this.ballotTextArea.value = raw.split(/\r?\n/).map(l => l.trim()).join('\n');
-            this.tabulate();
-          } catch (e) {
-            this.widgetContainer.innerHTML = '<p>Error loading custom ballot URL.</p>';
+        const urlBallot = params.get('ballot');
+        if (urlBallot) {
+          if (urlBallot.startsWith('http://') || urlBallot.startsWith('https://')) {
+            this.ballotSelector.value = 'custom';
+            this.ballotTextArea.value = 'Loading custom ballot data...';
+            this.tabulateButton.disabled = true;
+            try {
+              const raw = await fetch(urlBallot).then(r => r.text());
+              this.ballotTextArea.value = raw.split(/\r?\n/).map(l => l.trim()).join('\n');
+              this.tabulate();
+            } catch (e) {
+              this.widgetContainer.innerHTML = '<p>Error loading custom ballot URL.</p>';
+            }
+          } else {
+            const targetId = urlBallot.toLowerCase().trim();
+            const found = this.electionsList.find(item => item.id.toLowerCase() === targetId);
+            if (found) {
+              this.ballotSelector.value = found.id;
+              await this.loadBallot();
+            } else {
+              await this.loadBallot();
+            }
           }
         } else {
-          const targetId = urlBallot.toLowerCase().trim();
-          const found = this.electionsList.find(item => item.id.toLowerCase() === targetId);
-          if (found) {
-            this.ballotSelector.value = found.id;
-            await this.loadBallot();
-          } else {
-            await this.loadBallot();
-          }
+          await this.loadBallot();
         }
-      } else {
+      } catch (e) {
+        console.warn('[Voting] Init fallback notice:', e);
         await this.loadBallot();
       }
     }
-
   wireUi() {
       this.ballotSelector.addEventListener('change', () => {
         this.loadBallot();
@@ -94,37 +98,51 @@ class RankedChoiceApp {
     }
 
   async loadBallot() {
-      const sel = this.ballotSelector.value;
-      const descText = this.ballotDescriptionText;
-      if (sel === 'custom') {
-        this.ballotTextArea.value = '';
-        this.widgetContainer.innerHTML = '<p>Enter ballot data in the text area.</p>';
-        descText.textContent = '';
-        descText.style.display = 'none';
-        this.tabulateButton.disabled = true;
-        this.exportButton.disabled = true;
-        return;
-      }
-      const election = this.electionsList.find(item => item.id === sel);
-      if (!election) return;
+    const sel = this.ballotSelector.value;
+    const descText = this.ballotDescriptionText;
 
-      if (election.description) {
-        descText.textContent = election.description;
-        descText.style.display = 'block';
-      } else {
-        descText.textContent = '';
-        descText.style.display = 'none';
-      }
+    if (sel === 'custom') {
+      this.ballotTextArea.value = '';
+      this.widgetContainer.innerHTML = '<p style="padding:20px;text-align:center;color:#8b949e;">Enter ballot data in the text area below or select a sample election.</p>';
+      descText.textContent = '';
+      descText.style.display = 'none';
+      this.tabulateButton.disabled = true;
+      this.exportButton.disabled = true;
+      return;
+    }
 
+    const election = this.electionsList.find(item => item.id === sel);
+    if (!election) return;
+
+    if (election.description) {
+      descText.textContent = election.description;
+      descText.style.display = 'block';
+    } else {
+      descText.textContent = '';
+      descText.style.display = 'none';
+    }
+
+    const samples = RankedChoiceApp.getSampleBallots();
+    let ballotContent = samples[sel] || null;
+
+    if (!ballotContent && election.file) {
       try {
-        const raw = await fetch(election.file).then((r) => r.text());
-        this.ballotTextArea.value = raw.split(/\r?\n/).map((l) => l.trim()).join('\n');
-        this.tabulate();
+        const res = await fetch(election.file);
+        if (res.ok) {
+          ballotContent = await res.text();
+        }
       } catch (e) {
-        this.widgetContainer.innerHTML = '<p>Error loading ballot file from server.</p>';
+        console.warn('[Voting] Remote ballot fetch failed, using sample fallback:', e.message);
       }
     }
 
+    if (ballotContent) {
+      this.ballotTextArea.value = ballotContent.split(/\r?\n/).map(l => l.trim()).join('\n');
+      this.tabulate();
+    } else {
+      this.widgetContainer.innerHTML = '<p style="padding:20px;color:#ff7b72;">Unable to load ballot data.</p>';
+    }
+  }
   tabulate() {
       const txt = this.ballotTextArea.value;
       if (!txt.trim()) {
@@ -245,14 +263,17 @@ class RankedChoiceApp {
         makeElement('p', {}, `It shows the full pairwise matrix. The candidate with the highest "worst-case" score wins.`),
       ]);
 
-      UITools.makeDialog({
-        env: this.env,
-        title: 'About This Page',
-        contentElement: content,
-        width: '600px'
-      });
+      if (typeof UITools !== 'undefined' && typeof UITools.makeDialog === 'function') {
+        UITools.makeDialog({
+          env: this.env,
+          title: 'About This Page',
+          contentElement: content,
+          width: '600px'
+        });
+      } else {
+        this.toggleInfoPanel(true);
+      }
     }
-
   createInfoPanel() {
       const content = makeElement('div', { className: 'info-content' }, [
         makeElement('h2', { style: { textAlign: 'center', marginTop: '0' } }, 'Welcome to the Ranked Choice Visualizer'),
@@ -301,11 +322,18 @@ class RankedChoiceApp {
     }
 
   applyTheme(override = null) {
-      let mode = override || localStorage.getItem(this.savedThemeKey) || 'dark';
-      ThemeManager.apply(mode, this.rootElement);
+      let mode = override;
+      if (!mode) {
+        try {
+          mode = localStorage.getItem(this.savedThemeKey);
+        } catch (e) {}
+      }
+      mode = mode || 'dark';
+      if (typeof ThemeManager !== 'undefined' && typeof ThemeManager.apply === 'function') {
+        ThemeManager.apply(mode, this.rootElement);
+      }
       if (this.themeSelector) this.themeSelector.value = mode;
     }
-
   openCircularVoteDialog() {
       applyCss(`
         .cv-slider-group { margin-bottom: 10px; }
@@ -404,8 +432,12 @@ class RankedChoiceApp {
     }
 
   async run(env) {
-      this.env = env;
-      this.rootElement = env.container;
+      if (typeof DomBasics !== 'undefined' && typeof DomBasics.run === 'function') {
+        DomBasics.run();
+      }
+
+      this.env = (env && env.container) ? env : { container: (env instanceof HTMLElement ? env : null) || document.getElementById('app-container') || document.body };
+      this.rootElement = this.env.container;
       this.rootElement.classList.add('ranked-choice-wrapper');
 
       this.electionsList = [];
@@ -419,7 +451,6 @@ class RankedChoiceApp {
       this.buildDOM();
       await this.init();
     }
-
   destroy() {
       if (this.state.widget && typeof this.state.widget.destroy === 'function') {
         this.state.widget.destroy();
@@ -476,134 +507,356 @@ class RankedChoiceApp {
     }
 
   buildDOM() {
-      this.rootElement.innerHTML = '';
+    this.rootElement.innerHTML = '';
 
-      const title = makeElement('h1', { className: 'app-title' });
-      title.innerHTML = 'Ranked<br>Choice<br>Visualizer';
+    const title = makeElement('h1', { className: 'app-title' });
+    title.innerHTML = 'Ranked<br>Choice<br>Visualizer';
 
-      const condorcetRadio = makeElement('input', { type: 'radio', name: 'tabulationMethod', value: 'condorcet', checked: true });
-      const irvRadio = makeElement('input', { type: 'radio', name: 'tabulationMethod', value: 'irv' });
-      this.tabMethodRadios = [condorcetRadio, irvRadio];
+    const condorcetRadio = makeElement('input', { type: 'radio', name: 'tabulationMethod', value: 'condorcet', checked: true });
+    const irvRadio = makeElement('input', { type: 'radio', name: 'tabulationMethod', value: 'irv' });
+    this.tabMethodRadios = [condorcetRadio, irvRadio];
 
-      const fieldset = makeElement('fieldset', {}, 
-        makeElement('legend', {}, 'Tabulation Method'),
-        makeElement('div', { className: 'radio-group' }, 
-          makeElement('label', {}, condorcetRadio, 'Condorcet (Pairwise)'),
-          makeElement('label', {}, irvRadio, 'Instant Runoff (IRV)')
-        )
-      );
-      const tabControls = makeElement('div', { className: 'tabulation-controls' }, fieldset);
+    const fieldset = makeElement('fieldset', {}, 
+      makeElement('legend', {}, 'Tabulation Method'),
+      makeElement('div', { className: 'radio-group' }, 
+        makeElement('label', {}, condorcetRadio, 'Condorcet (Pairwise)'),
+        makeElement('label', {}, irvRadio, 'Instant Runoff (IRV)')
+      )
+    );
+    const tabControls = makeElement('div', { className: 'tabulation-controls' }, fieldset);
 
-      this.showInfoButton = makeElement('button', { id: 'showInfoButton' }, 'What is this?');
-      this.themeSelector = makeElement('select', { id: 'themeSelector', className: 'theme-select' }, 
-        makeElement('option', { value: 'light' }, 'Light'),
-        makeElement('option', { value: 'sublime' }, 'Sublime'),
-        makeElement('option', { value: 'dark' }, 'Dark'),
-        makeElement('option', { value: 'warm' }, 'Dark Warm'),
-        makeElement('option', { value: 'neon' }, 'Dark Funky')
-      );
-
-      const headerActions = makeElement('div', { className: 'header-actions' }, this.showInfoButton, this.themeSelector);
-      const headerBar = makeElement('div', { className: 'header-bar' }, title, tabControls, headerActions);
-
-      this.widgetContainer = makeElement('div', { id: 'widgetContainer', className: 'widget-area' });
-
-      this.ballotSelector = makeElement('select', { id: 'ballotSelector' });
-      this.tabulateButton = makeElement('button', { id: 'tabulateButton' }, 'Tabulate');
-      this.exportButton = makeElement('button', { id: 'exportButton', disabled: true }, 'Export Data');
-
-      this.controlsDiv = makeElement('div', { className: 'controls' }, this.ballotSelector, this.tabulateButton, this.exportButton);
-      
-      this.ballotDescriptionText = makeElement('div', { 
-        className: 'ballot-description', 
-        style: { display: 'none' } 
-      });
-
-      this.ballotTextArea = makeElement('textarea', { id: 'ballotText' });
-
-      const textContainer = makeElement('div', { className: 'text-container' }, this.controlsDiv, this.ballotDescriptionText, this.ballotTextArea);
-      const contentArea = makeElement('div', { className: 'content-area' }, textContainer);
-
-      const container = makeElement('div', { className: 'container' }, headerBar, this.widgetContainer, contentArea);
-      this.rootElement.appendChild(container);
-
-      this.wireUi();
-      this.prepareBallotSelector();
+    // Identity Status / Community Switcher Pill
+    let activeProfile = null;
+    if (typeof CommunityOracle !== 'undefined') {
+      CommunityOracle.loadProfiles();
+      activeProfile = CommunityOracle.getAllProfiles()[0] || null;
     }
+    const identityName = activeProfile ? `${activeProfile.name} #${activeProfile.tag}` : 'Rob Brown #1001';
 
+    this.identityBtn = makeElement('button', {
+      id: 'btn-community-voter-id',
+      title: 'Switch voter identity via CommunityOracle',
+      style: {
+        padding: '4px 10px',
+        fontSize: '12px',
+        background: 'rgba(0, 242, 254, 0.1)',
+        color: '#00f2fe',
+        border: '1px solid rgba(0, 242, 254, 0.35)',
+        borderRadius: '6px',
+        fontWeight: 'bold',
+        cursor: 'pointer'
+      },
+      onclick: () => this.showCommunityIdentityDialog()
+    }, `👤 ${identityName}`);
+
+    this.showInfoButton = makeElement('button', { id: 'showInfoButton' }, 'What is this?');
+    this.themeSelector = makeElement('select', { id: 'themeSelector', className: 'theme-select' }, 
+      makeElement('option', { value: 'dark', selected: true }, 'Dark'),
+      makeElement('option', { value: 'light' }, 'Light'),
+      makeElement('option', { value: 'sublime' }, 'Sublime'),
+      makeElement('option', { value: 'warm' }, 'Dark Warm'),
+      makeElement('option', { value: 'neon' }, 'Dark Funky')
+    );
+
+    const headerActions = makeElement('div', { className: 'header-actions' }, 
+      makeElement('div', { style: { display: 'flex', gap: '6px', alignItems: 'center' } }, this.identityBtn, this.showInfoButton),
+      this.themeSelector
+    );
+    const headerBar = makeElement('div', { className: 'header-bar' }, title, tabControls, headerActions);
+
+    this.widgetContainer = makeElement('div', { id: 'widgetContainer', className: 'widget-area' });
+
+    this.ballotSelector = makeElement('select', { id: 'ballotSelector' });
+    this.tabulateButton = makeElement('button', { id: 'tabulateButton' }, 'Tabulate');
+    this.exportButton = makeElement('button', { id: 'exportButton', disabled: true }, 'Export Data');
+
+    const btnCastBallot = makeElement('button', {
+      id: 'btn-cast-community-ballot',
+      style: { background: '#271052', color: '#d2a8ff', border: '1px solid #8257e5', borderRadius: '5px', padding: '10px 14px', fontWeight: 'bold', cursor: 'pointer' },
+      onclick: () => this.castCommunityBallot()
+    }, '🗳️ Vote as ' + (activeProfile ? activeProfile.name.split(' ')[0] : 'Voter'));
+
+    this.controlsDiv = makeElement('div', { className: 'controls' }, this.ballotSelector, this.tabulateButton, btnCastBallot, this.exportButton);
+
+    this.ballotDescriptionText = makeElement('div', { 
+      className: 'ballot-description', 
+      style: { display: 'none' } 
+    });
+
+    this.ballotTextArea = makeElement('textarea', { id: 'ballotText' });
+
+    const textContainer = makeElement('div', { className: 'text-container' }, this.controlsDiv, this.ballotDescriptionText, this.ballotTextArea);
+    const contentArea = makeElement('div', { className: 'content-area' }, textContainer);
+
+    const container = makeElement('div', { className: 'container' }, headerBar, this.widgetContainer, contentArea);
+    this.rootElement.appendChild(container);
+
+    this.wireUi();
+    this.prepareBallotSelector();
+  }
 
   updateUrlParams() {
-      const params = new URLSearchParams(window.location.search);
-
-      if (this.themeSelector) {
-        params.set('theme', this.themeSelector.value);
-      }
-
-      const activeRadio = this.tabMethodRadios.find(r => r.checked);
-      const method = activeRadio ? activeRadio.value : 'condorcet';
-      params.set('method', method);
-
-      const sel = this.ballotSelector.value;
-      if (sel === 'custom') {
-        const queryBallot = new URLSearchParams(window.location.search).get('ballot');
-        if (queryBallot && (queryBallot.startsWith('http://') || queryBallot.startsWith('https://'))) {
-          params.set('ballot', queryBallot);
-        } else {
-          params.set('ballot', 'custom');
-        }
-      } else {
-        params.set('ballot', sel);
-      }
-
-      if (method === 'condorcet' && this.state.widget) {
-        params.set('view', this.state.widget.options.view || 'both');
-        params.set('display', this.state.widget.displayMode || 'none');
-      } else {
-        params.delete('view');
-        params.delete('display');
-      }
-
-      const newSearch = '?' + params.toString();
-      if (window.location.search !== newSearch) {
-        window.history.replaceState(null, '', newSearch);
-      }
-    }
-
-  async fetchBallotsConfig() {
       try {
-        const res = await fetch('/SiteResources/rankedBallotData/ballots.json');
-        if (!res.ok) throw new Error("HTTP " + res.status);
-        const data = await res.json();
-        this.electionsList = data.elections || [];
-      } catch (e) {
-        console.warn("Could not fetch server-hosted ballots.json, loading safe fallback structure", e);
-        this.electionsList = [
-          {
-            id: "burlington",
-            name: "Burlington 2009",
-            file: "/SiteResources/rankedBallotData/burlington2009.txt",
-            description: "These are ones where the Condorcet winner differed from the Instant Runoff (IRV) winner."
-          },
-          {
-            id: "alaska",
-            name: "Alaska 2022",
-            file: "/SiteResources/rankedBallotData/alaskaspecial2022.txt",
-            description: "These are ones where the Condorcet winner differed from the Instant Runoff (IRV) winner."
-          },
-          {
-            id: "meta",
-            name: "endFPTP 'Meta'",
-            file: "/SiteResources/rankedBallotData/endfptpVotingMethod.txt",
-            description: "We actually voted on voting methods in the end fast first past the post group."
-          },
-          {
-            id: "sf",
-            name: "SF Mayor 2024",
-            file: "/SiteResources/rankedBallotData/sanfrancisco2024.txt",
-            description: "Notable for electing a very popular Centrist."
+        const params = new URLSearchParams(window.location.search);
+
+        if (this.themeSelector) {
+          params.set('theme', this.themeSelector.value);
+        }
+
+        const activeRadio = this.tabMethodRadios.find(r => r.checked);
+        const method = activeRadio ? activeRadio.value : 'condorcet';
+        params.set('method', method);
+
+        const sel = this.ballotSelector ? this.ballotSelector.value : 'community';
+        if (sel === 'custom') {
+          const queryBallot = new URLSearchParams(window.location.search).get('ballot');
+          if (queryBallot && (queryBallot.startsWith('http://') || queryBallot.startsWith('https://'))) {
+            params.set('ballot', queryBallot);
+          } else {
+            params.set('ballot', 'custom');
           }
-        ];
+        } else {
+          params.set('ballot', sel);
+        }
+
+        if (method === 'condorcet' && this.state.widget) {
+          params.set('view', this.state.widget.options.view || 'both');
+          params.set('display', this.state.widget.displayMode || 'none');
+        } else {
+          params.delete('view');
+          params.delete('display');
+        }
+
+        const newSearch = '?' + params.toString();
+        if (window.location.search !== newSearch) {
+          window.history.replaceState(null, '', newSearch);
+        }
+      } catch (err) {
+        // Gracefully ignore history manipulation errors in opaque/sandboxed iframe environments
       }
     }
+  async fetchBallotsConfig() {
+    this.electionsList = [
+      {
+        id: "community",
+        name: "🌐 Community Consensus 2026",
+        description: "CommunityOracle web-of-trust priorities ballot voted by verified community identities."
+      },
+      {
+        id: "burlington",
+        name: "Burlington 2009",
+        file: "/SiteResources/rankedBallotData/burlington2009.txt",
+        description: "Classic election where Condorcet winner (Montroll) differed from IRV winner (Kiss)."
+      },
+      {
+        id: "alaska",
+        name: "Alaska Special 2022",
+        file: "/SiteResources/rankedBallotData/alaskaspecial2022.txt",
+        description: "High-profile US Congressional special election with Condorcet / IRV divergence."
+      },
+      {
+        id: "meta",
+        name: "endFPTP 'Meta' Voting Poll",
+        file: "/SiteResources/rankedBallotData/endfptpVotingMethod.txt",
+        description: "Comparing voting methods (Condorcet, Approval, Score, IRV) tabulated against each other."
+      },
+      {
+        id: "sf",
+        name: "SF Mayor 2024",
+        file: "/SiteResources/rankedBallotData/sanfrancisco2024.txt",
+        description: "Ranked choice election electing a consensus candidate across multi-tier transfers."
+      }
+    ];
+  }
+  static getSampleBallots() {
+    return {
+      community: [
+        "ROB: Rob Brown (Architectural Integrity)",
+        "SAR: Sarah (User Ergonomics & Review)",
+        "DAV: Dave (Decentralized Federation)",
+        "ALX: Alex (Realtime Sync & Audio)",
+        "---",
+        "8: ROB>SAR>DAV>ALX [Architecture Team]",
+        "6: SAR>ROB>DAV>ALX [Design Circle]",
+        "5: DAV>SAR>ROB>ALX [Federation Group]",
+        "3: ALX>DAV>ROB>SAR [Realtime Engine]"
+      ].join('\n'),
+
+      burlington: [
+        "M: Bob Kiss (Progressive)",
+        "D: Andy Montroll (Democrat)",
+        "R: Kurt Wright (Republican)",
+        "---",
+        "2043: R>D>M",
+        "1297: M>D>R",
+        "1013: D>M>R",
+        "977: D>R>M",
+        "895: M>R>D",
+        "783: R>M>D"
+      ].join('\n'),
+
+      alaska: [
+        "P: Sarah Palin (Republican)",
+        "B: Nick Begich (Republican)",
+        "Peltola: Mary Peltola (Democrat)",
+        "---",
+        "33800: Peltola>B>P",
+        "21100: Peltola>P>B",
+        "53800: P>B>Peltola",
+        "27000: B>P>Peltola",
+        "15400: B>Peltola>P",
+        "14000: P>Peltola>B"
+      ].join('\n'),
+
+      meta: [
+        "C: Condorcet (Pairwise Minimax)",
+        "I: Instant Runoff (IRV)",
+        "A: Approval Voting",
+        "S: Score Voting",
+        "---",
+        "14: C>A>S>I",
+        "11: A>S>C>I",
+        "9: S>A>C>I",
+        "6: I>C>A>S"
+      ].join('\n'),
+
+      sf: [
+        "L: Daniel Lurie (Centrist / Civic)",
+        "B: London Breed (Incumbent)",
+        "P: Aaron Peskin (Progressive)",
+        "F: Mark Farrell (Moderate)",
+        "---",
+        "42: L>F>B>P",
+        "38: B>L>F>P",
+        "31: P>B>L>F",
+        "28: F>L>B>P"
+      ].join('\n')
+    };
+  }
+
+  showCommunityIdentityDialog() {
+    if (typeof CommunityOracle === 'undefined') return;
+
+    const content = makeElement('div', { style: { display: 'flex', flexDirection: 'column', gap: '10px' } });
+    const grid = makeElement('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' } });
+
+    CommunityOracle.getAllProfiles().forEach(p => {
+      const btn = makeElement('button', {
+        className: 'dr-nav-btn',
+        style: { padding: '8px 10px', textAlign: 'left', display: 'flex', flexDirection: 'column', gap: '2px', background: '#0d1117', border: '1px solid #1e293b', borderRadius: '6px', cursor: 'pointer' },
+        onclick: () => {
+          this.activeVoterProfile = p;
+          if (this.identityBtn) {
+            this.identityBtn.textContent = `👤 ${p.name} #${p.tag}`;
+          }
+          dlg.close();
+        }
+      }, [
+        makeElement('strong', { style: { color: '#00f2fe', fontSize: '12px' } }, `${p.name} #${p.tag}`),
+        makeElement('span', { style: { color: '#10b981', fontSize: '10px', fontFamily: 'monospace' } }, `${Math.round(p.reputation * 100)}% Rep Weight`)
+      ]);
+      grid.appendChild(btn);
+    });
+
+    content.append(
+      makeElement('p', { style: { fontSize: '11px', color: '#94a3b8', margin: 0 } }, 'Select active community identity for cast ballots:'),
+      grid
+    );
+
+    const dlg = UITools.makeDialog({
+      env: this.env,
+      title: '🌐 Select Community Voter Identity',
+      contentElement: content,
+      width: '420px'
+    });
+  }
+
+  castCommunityBallot() {
+    if (!this.state.electionData || !this.state.electionData.candidates) {
+      alert('Please tabulate or load an election first.');
+      return;
+    }
+
+    const candidateKeys = Object.keys(this.state.electionData.candidates);
+    if (candidateKeys.length === 0) return;
+
+    const prof = this.activeVoterProfile || (typeof CommunityOracle !== 'undefined' ? CommunityOracle.getAllProfiles()[0] : null);
+    const voterName = prof ? `${prof.name} #${prof.tag}` : 'Community Member';
+    const weight = prof ? Math.max(1, Math.round((prof.reputation || 0.5) * 10)) : 5;
+
+    const content = makeElement('div', { style: { display: 'flex', flexDirection: 'column', gap: '10px', fontFamily: 'monospace' } });
+    content.appendChild(makeElement('p', { style: { fontSize: '12px', color: '#94a3b8', margin: 0 } },
+      `Rank candidate preferences as ${voterName} (${weight} weighted vote power):`
+    ));
+
+    let order = [...candidateKeys];
+    const list = makeElement('div', { style: { display: 'flex', flexDirection: 'column', gap: '6px' } });
+
+    const renderRankList = () => {
+      list.innerHTML = '';
+      order.forEach((k, idx) => {
+        const name = this.state.electionData.candidates[k] || k;
+        const row = makeElement('div', {
+          style: {
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            background: '#0d1117', border: '1px solid #1e293b', borderRadius: '6px', padding: '6px 10px'
+          }
+        }, [
+          makeElement('span', { style: { color: idx === 0 ? '#10b981' : '#f8fafc', fontWeight: 'bold' } }, `#${idx + 1}: ${name} (${k})`),
+          makeElement('div', { style: { display: 'flex', gap: '4px' } }, [
+            makeElement('button', {
+              style: { padding: '2px 6px', fontSize: '10px', cursor: 'pointer' },
+              onclick: () => {
+                if (idx > 0) {
+                  [order[idx - 1], order[idx]] = [order[idx], order[idx - 1]];
+                  renderRankList();
+                }
+              }
+            }, '▲'),
+            makeElement('button', {
+              style: { padding: '2px 6px', fontSize: '10px', cursor: 'pointer' },
+              onclick: () => {
+                if (idx < order.length - 1) {
+                  [order[idx + 1], order[idx]] = [order[idx], order[idx + 1]];
+                  renderRankList();
+                }
+              }
+            }, '▼')
+          ])
+        ]);
+        list.appendChild(row);
+      });
+    };
+
+    renderRankList();
+    content.appendChild(list);
+
+    const btnSubmit = makeElement('button', {
+      style: { padding: '8px', background: '#238636', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' },
+      onclick: () => {
+        const ballotLine = `${weight}: ${order.join('>')} [${voterName}]`;
+        this.ballotTextArea.value = this.ballotTextArea.value.trim() + '\n' + ballotLine;
+        this.tabulate();
+        dlg.close();
+        alert(`✓ Cast ${weight} vote(s) for ${order[0]} as ${voterName}!`);
+      }
+    }, `Submit Ballot (${weight} Votes)`);
+
+    content.appendChild(btnSubmit);
+
+    const dlg = UITools.makeDialog({
+      env: this.env,
+      title: `🗳️ Cast Ballot: ${voterName}`,
+      contentElement: content,
+      width: '380px'
+    });
+  }
+
+  static _export = (() => {
+      if (typeof globalThis !== 'undefined') globalThis.RankedChoiceApp = RankedChoiceApp;
+      if (typeof window !== 'undefined') window.RankedChoiceApp = RankedChoiceApp;
+      if (typeof module !== 'undefined' && module.exports) module.exports = RankedChoiceApp;
+      return true;
+    })();
 }
 

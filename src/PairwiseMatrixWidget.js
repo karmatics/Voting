@@ -58,8 +58,8 @@ class PairwiseMatrixWidget {
       };
       this.options = { ...defaults, ...options };
       this.env = hostEnv;
-      this.matrix = matrixData;
-      this.cand = candidates;
+      this.matrix = matrixData || {};
+      this.cand = candidates || {};
       this.displayMode = this.options.displayMode;
 
       if (this.options.useLocalStorage) {
@@ -79,15 +79,16 @@ class PairwiseMatrixWidget {
 
       this.element = makeElement('div', { class: 'pmwHost' });
       this.highlightRects = { row: null, col: null, worstLoss: null };
+      this.popup = makeElement('div', { class: 'pairwisePopup' });
+
+      if (this.env && this.env.container) {
+        this.env.container.appendChild(this.popup);
+      } else if (typeof document !== 'undefined' && document.body) {
+        document.body.append(this.popup);
+      }
+
       this.injectCss();
       this.render();
-      this.popup = makeElement('div', { class: 'pairwisePopup' });
-      
-      if (this.env && this.env.container) {
-          this.env.container.appendChild(this.popup);
-      } else {
-          document.body.append(this.popup);
-      }
 
       this._pieContentCycleFunc = () => {
         if (this.options.view !== 'pies' && this.options.view !== 'both') return;
@@ -108,6 +109,7 @@ class PairwiseMatrixWidget {
 
       this._handleKeydown = (e) => {
         if (
+          e.key &&
           e.key.toLowerCase() === 'p' &&
           document.activeElement?.tagName !== 'TEXTAREA' &&
           document.activeElement?.tagName !== 'INPUT' &&
@@ -127,7 +129,6 @@ class PairwiseMatrixWidget {
       this.interactivePieElements = [];
       this.worstLossCellDivs = {};
     }
-
   // Methods remain completely identical except for showPopup sizing...
     calculateWorstLossDetails() {
       this.worstLosses = {};
@@ -722,8 +723,9 @@ class PairwiseMatrixWidget {
       Object.values(this.colLabelDivs).forEach(el => el.classList.remove('candidateHighlighted'));
     }
 
-  fmt(n) { return n.toLocaleString('en-US'); }
-
+  fmt(n) {
+      return (typeof n === 'number') ? n.toLocaleString('en-US') : (n ?? '');
+    }
   injectCss() {
       applyCss(`
         .pmwHost { padding: ${this.CHART_PADDING}px; font-size: 12.5px; display: flex; flex-direction: column; gap: ${this.CHART_PADDING}px; background-color: transparent; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
@@ -820,4 +822,10 @@ class PairwiseMatrixWidget {
       }
     }
 
+  static _export = (() => {
+      if (typeof globalThis !== 'undefined') globalThis.PairwiseMatrixWidget = PairwiseMatrixWidget;
+      if (typeof window !== 'undefined') window.PairwiseMatrixWidget = PairwiseMatrixWidget;
+      if (typeof module !== 'undefined' && module.exports) module.exports = PairwiseMatrixWidget;
+      return true;
+    })();
 } // End of PairwiseMatrixWidget class

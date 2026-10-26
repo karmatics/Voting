@@ -22,6 +22,14 @@ class CondorcetTabulator {
 
     // 4. Convert to the PairwiseMatrixWidget-ready structure.
     return PairwiseCalculator.formatMatrixAndCandidates(matrix, rankedResults);
-  } // end run
+  }
+
+  static _export = (() => {
+      if (typeof globalThis !== 'undefined') globalThis.CondorcetTabulator = CondorcetTabulator;
+      if (typeof window !== 'undefined') window.CondorcetTabulator = CondorcetTabulator;
+      if (typeof module !== 'undefined' && module.exports) module.exports = CondorcetTabulator;
+      return true;
+    })();
+// end run
 
 } // end class CondorcetTabulator

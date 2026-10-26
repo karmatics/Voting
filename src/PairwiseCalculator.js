@@ -174,6 +174,14 @@ class PairwiseCalculator {
       }
     }
     return matrixData;
-  } // end formatMatrixAndCandidates
+  }
+
+  static _export = (() => {
+      if (typeof globalThis !== 'undefined') globalThis.PairwiseCalculator = PairwiseCalculator;
+      if (typeof window !== 'undefined') window.PairwiseCalculator = PairwiseCalculator;
+      if (typeof module !== 'undefined' && module.exports) module.exports = PairwiseCalculator;
+      return true;
+    })();
+// end formatMatrixAndCandidates
 
 } // end class PairwiseCalculator

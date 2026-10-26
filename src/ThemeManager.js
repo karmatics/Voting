@@ -120,15 +120,21 @@ class ThemeManager {
           : 'theme-light'
       );
 
-      applyCss('', 'appTheme');
-
-      const css = ThemeManager.palettes[mode] || ThemeManager.palettes.light;
-      const shared = `.theme-select{background:inherit;color:inherit;border-color:inherit;}`;
-
-      applyCss(css + shared, 'appTheme');
+      if (typeof applyCss === 'function') {
+        applyCss('', 'appTheme');
+        const css = ThemeManager.palettes[mode] || ThemeManager.palettes.light;
+        const shared = `.theme-select{background:inherit;color:inherit;border-color:inherit;}`;
+        applyCss(css + shared, 'appTheme');
+      }
     }
-
   static addTheme(id, cssString) {
       ThemeManager.palettes[id] = cssString;
     }
+
+  static _export = (() => {
+      if (typeof globalThis !== 'undefined') globalThis.ThemeManager = ThemeManager;
+      if (typeof window !== 'undefined') window.ThemeManager = ThemeManager;
+      if (typeof module !== 'undefined' && module.exports) module.exports = ThemeManager;
+      return true;
+    })();
 }

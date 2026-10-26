@@ -146,6 +146,14 @@ class IRV {
       winner: sankeyWinner,
       transfers: [] // SankeyDiagram calculates flows from round data
     };
-  } // end tabulate
+  }
+
+  static _export = (() => {
+      if (typeof globalThis !== 'undefined') globalThis.IRV = IRV;
+      if (typeof window !== 'undefined') window.IRV = IRV;
+      if (typeof module !== 'undefined' && module.exports) module.exports = IRV;
+      return true;
+    })();
+// end tabulate
 
 } // end class IRV

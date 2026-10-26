@@ -66,6 +66,14 @@ class Minimax {
     }
 
     return winner;
-  } // end compute
+  }
+
+  static _export = (() => {
+      if (typeof globalThis !== 'undefined') globalThis.Minimax = Minimax;
+      if (typeof window !== 'undefined') window.Minimax = Minimax;
+      if (typeof module !== 'undefined' && module.exports) module.exports = Minimax;
+      return true;
+    })();
+// end compute
 
 } 

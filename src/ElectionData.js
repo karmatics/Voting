@@ -11,54 +11,57 @@ class ElectionData {
   } // end fromBallotText
 
   /* ---------- ElectionData.js (only the two helpers below change) ---------- */
-  // ↓ replace the entire parse() and parseBallot() methods with this block
-  static parse(text){
-    const lines = text.split(/\r?\n/);
-    const candidateMap = {};          // long → short
-    const candidates   = {};          // short → long
-    const ballots      = [];
-    let parsingCandidates = true;
 
-    for (const rawLine of lines){
-      const line = rawLine.trim();
-      if (!line) continue;                          // skip blanks
+  static parse(text) {
+      const lines = (text || '').split(/\r?\n/);
+      const candidateMap = {};          // long → short
+      const candidates   = {};          // short → long
+      const ballots      = [];
+      let parsingCandidates = true;
 
-      if (parsingCandidates){
-        if (line.startsWith('-')) { parsingCandidates = false; continue; }
-        const [short , longWithBrackets] = line.split(':').map(s=>s.trim());
-        // Trim off score in brackets, if it exists, and any extra whitespace.
-        const long = longWithBrackets.split('[')[0].trim();
-        candidateMap[long] = short;
-        candidates[short]  = long;
-      } else {
-        if (line.startsWith('-')) continue;         // skip the dashed divider
+      for (const rawLine of lines) {
+        const line = rawLine.trim();
+        if (!line) continue;
 
-        const processBallotLine = (textLine, lineCount) => {
+        if (parsingCandidates) {
+          if (line.startsWith('-') || line.startsWith('=')) { parsingCandidates = false; continue; }
+          if (!line.includes(':')) continue;
+          const [short, longWithBrackets] = line.split(':').map(s => s.trim());
+          const long = (longWithBrackets || short).split('[')[0].trim();
+          if (short && long) {
+            candidateMap[long] = short;
+            candidates[short]  = long;
+          }
+        } else {
+          if (line.startsWith('-') || line.startsWith('=')) continue;
+
+          const processBallotLine = (textLine, lineCount) => {
             let ballotStr = textLine;
             let ballotName = null;
             const nameMatch = textLine.match(/^(.*?)\s*\[(.*?)\]\s*$/);
             if (nameMatch) {
-                ballotStr = nameMatch[1].trim();
-                ballotName = nameMatch[2].trim();
+              ballotStr = nameMatch[1].trim();
+              ballotName = nameMatch[2].trim();
             }
             return {
-                count: lineCount,
-                ranks: ElectionData.parseBallot(ballotStr, candidateMap),
-                name: ballotName
+              count: lineCount,
+              ranks: ElectionData.parseBallot(ballotStr, candidateMap),
+              name: ballotName
             };
-        };
+          };
 
-        if (line.includes(':')) {
-          const [countStr , ballotPart] = line.split(':', 2);
-          const count = parseInt(countStr.trim(), 10);
-          ballots.push(processBallotLine(ballotPart.trim(), count));
-        } else {
-          ballots.push(processBallotLine(line, 1));
+          if (line.includes(':')) {
+            const [countStr, ballotPart] = line.split(':', 2);
+            const count = parseInt(countStr.trim(), 10);
+            ballots.push(processBallotLine(ballotPart.trim(), isNaN(count) ? 1 : count));
+          } else {
+            ballots.push(processBallotLine(line, 1));
+          }
         }
       }
+      return { candidates, ballots };
     }
-    return {candidates, ballots};
-  } // end parse
+ // end parse
 
   static parseBallot(ballotStr, cmap){
     // handles ties with '='   (e.g. "a=b>c")
@@ -70,6 +73,14 @@ class ElectionData {
       });
       return toks.length === 1 ? toks[0] : toks;   // single or tied group
     });
-  } // end parseBallot
+  }
+
+  static _export = (() => {
+      if (typeof globalThis !== 'undefined') globalThis.ElectionData = ElectionData;
+      if (typeof window !== 'undefined') window.ElectionData = ElectionData;
+      if (typeof module !== 'undefined' && module.exports) module.exports = ElectionData;
+      return true;
+    })();
+// end parseBallot
 
 } 
